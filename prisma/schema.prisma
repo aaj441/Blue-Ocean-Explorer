@@ -1,0 +1,675 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model for authentication and profile
+model User {
+  id            Int               @id @default(autoincrement())
+  email         String            @unique
+  passwordHash  String
+  name          String
+  role          UserRole          @default(ANALYST)
+  lastLogin     DateTime?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  
+  // Relations
+  markets           Market[]
+  segments          Segment[]
+  opportunities     Opportunity[]
+  boards            Board[]
+  radars            Radar[]
+  strategySessions  StrategySession[]
+  scenarios         Scenario[]
+  breadcrumbs       Breadcrumb[]
+  problems          Problem[]
+  ecosystems        Ecosystem[]
+  challenges        Challenge[]
+  submissions       ChallengeSubmission[]
+  votes             Vote[]
+  ideas             CrowdfundedIdea[]
+  ideaBackings      IdeaBacking[]
+  listings          MarketplaceListing[]
+  purchases         MarketplacePurchase[]
+  reviews           MarketplaceReview[]
+  preferences       UserPreferences?
+  subscription      UserSubscription?
+  creditBalance     CreditBalance?
+  badges            UserBadge[]
+  referrals         Referral[]          @relation("ReferralUser")
+  referredUsers     Referral[]          @relation("ReferredUser")
+}
+
+enum UserRole {
+  ANALYST
+  STRATEGIST
+  EXECUTIVE
+  ADMIN
+}
+
+// Market model for market analysis
+model Market {
+  id            Int       @id @default(autoincrement())
+  name          String
+  description   String?
+  industry      String
+  size          Float?
+  growthRate    Float?
+  userId        Int
+  user          User      @relation(fields: [userId], references: [id])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  // Relations
+  segments      Segment[]
+  opportunities Opportunity[]
+  competitors   Competitor[]
+  trends        Trend[]
+}
+
+// Market segments
+model Segment {
+  id              Int       @id @default(autoincrement())
+  name            String
+  description     String?
+  size            Float?
+  growthRate      Float?
+  characteristics Json?
+  marketId        Int
+  market          Market    @relation(fields: [marketId], references: [id])
+  userId          Int
+  user            User      @relation(fields: [userId], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Relations
+  opportunities   Opportunity[]
+}
+
+// Business opportunities
+model Opportunity {
+  id              Int                @id @default(autoincrement())
+  title           String
+  description     String
+  type            OpportunityType
+  status          OpportunityStatus  @default(IDENTIFIED)
+  score           Float              @default(0)
+  potentialValue  Float?
+  timeToMarket    Int?               // in months
+  riskLevel       RiskLevel          @default(MEDIUM)
+  marketId        Int?
+  market          Market?            @relation(fields: [marketId], references: [id])
+  segmentId       Int?
+  segment         Segment?           @relation(fields: [segmentId], references: [id])
+  userId          Int
+  user            User               @relation(fields: [userId], references: [id])
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  
+  // Relations
+  boards          BoardOpportunity[]
+  scenarios       Scenario[]
+  connections     OpportunityConnection[]  @relation("FromOpportunity")
+  connectedTo     OpportunityConnection[]  @relation("ToOpportunity")
+  trends          OpportunityTrend[]
+}
+
+enum OpportunityType {
+  BLUE_OCEAN
+  MARKET_GAP
+  DISRUPTION
+  INNOVATION
+  PARTNERSHIP
+  EXPANSION
+}
+
+enum OpportunityStatus {
+  IDENTIFIED
+  EVALUATING
+  VALIDATED
+  PURSUING
+  IMPLEMENTED
+  ARCHIVED
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// Boards for organizing opportunities
+model Board {
+  id              Int       @id @default(autoincrement())
+  name            String
+  description     String?
+  type            BoardType @default(GENERAL)
+  userId          Int
+  user            User      @relation(fields: [userId], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Relations
+  opportunities   BoardOpportunity[]
+}
+
+enum BoardType {
+  GENERAL
+  STRATEGIC
+  INNOVATION
+  MARKET_ANALYSIS
+  COMPETITIVE
+}
+
+// Many-to-many relation between boards and opportunities
+model BoardOpportunity {
+  id              Int         @id @default(autoincrement())
+  boardId         Int
+  board           Board       @relation(fields: [boardId], references: [id])
+  opportunityId   Int
+  opportunity     Opportunity @relation(fields: [opportunityId], references: [id])
+  position        Int         @default(0)
+  addedAt         DateTime    @default(now())
+  
+  @@unique([boardId, opportunityId])
+}
+
+// Opportunity connections for constellation view
+model OpportunityConnection {
+  id              Int         @id @default(autoincrement())
+  fromId          Int
+  from            Opportunity @relation("FromOpportunity", fields: [fromId], references: [id])
+  toId            Int
+  to              Opportunity @relation("ToOpportunity", fields: [toId], references: [id])
+  strength        Float       @default(0.5)
+  type            String?
+  createdAt       DateTime    @default(now())
+  
+  @@unique([fromId, toId])
+}
+
+// Radar system for tracking interests
+model Radar {
+  id              Int       @id @default(autoincrement())
+  name            String
+  description     String?
+  keywords        String[]
+  industries      String[]
+  userId          Int
+  user            User      @relation(fields: [userId], references: [id])
+  active          Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Relations
+  matches         RadarMatch[]
+}
+
+// Radar matches
+model RadarMatch {
+  id              Int       @id @default(autoincrement())
+  radarId         Int
+  radar           Radar     @relation(fields: [radarId], references: [id])
+  matchType       String
+  matchData       Json
+  relevanceScore  Float
+  createdAt       DateTime  @default(now())
+}
+
+// Strategy sessions for AI-assisted planning
+model StrategySession {
+  id              Int       @id @default(autoincrement())
+  name            String
+  objective       String
+  context         String?
+  messages        Json      @default("[]")
+  status          SessionStatus @default(ACTIVE)
+  userId          Int
+  user            User      @relation(fields: [userId], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Relations
+  canvases        BlueOceanCanvas[]
+}
+
+enum SessionStatus {
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+// Blue Ocean Strategy Canvas
+model BlueOceanCanvas {
+  id              Int       @id @default(autoincrement())
+  name            String
+  factors         Json      // Array of competing factors
+  currentProfile  Json      // Current value curve
+  newProfile      Json      // New value curve
+  sessionId       Int?
+  session         StrategySession? @relation(fields: [sessionId], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// Scenarios for opportunity evaluation
+model Scenario {
+  id              Int         @id @default(autoincrement())
+  name            String
+  description     String
+  assumptions     Json
+  outcomes        Json
+  probability     Float       @default(0.5)
+  impact          Float       @default(0.5)
+  opportunityId   Int
+  opportunity     Opportunity @relation(fields: [opportunityId], references: [id])
+  userId          Int
+  user            User        @relation(fields: [userId], references: [id])
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+// Competitors
+model Competitor {
+  id              Int       @id @default(autoincrement())
+  name            String
+  description     String?
+  strengths       String[]
+  weaknesses      String[]
+  marketShare     Float?
+  marketId        Int
+  market          Market    @relation(fields: [marketId], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// Market trends
+model Trend {
+  id              Int       @id @default(autoincrement())
+  name            String
+  description     String
+  category        String
+  impact          Float     @default(0.5)
+  timeframe       String
+  marketId        Int?
+  market          Market?   @relation(fields: [marketId], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Relations
+  opportunities   OpportunityTrend[]
+  intersections   TrendIntersection[] @relation("TrendA")
+  intersectedBy   TrendIntersection[] @relation("TrendB")
+}
+
+// Many-to-many relation between opportunities and trends
+model OpportunityTrend {
+  id              Int         @id @default(autoincrement())
+  opportunityId   Int
+  opportunity     Opportunity @relation(fields: [opportunityId], references: [id])
+  trendId         Int
+  trend           Trend       @relation(fields: [trendId], references: [id])
+  relevance       Float       @default(0.5)
+  
+  @@unique([opportunityId, trendId])
+}
+
+// Trend intersections
+model TrendIntersection {
+  id              Int       @id @default(autoincrement())
+  trendAId        Int
+  trendA          Trend     @relation("TrendA", fields: [trendAId], references: [id])
+  trendBId        Int
+  trendB          Trend     @relation("TrendB", fields: [trendBId], references: [id])
+  intersectionType String
+  opportunities   Json      // Potential opportunities from intersection
+  createdAt       DateTime  @default(now())
+  
+  @@unique([trendAId, trendBId])
+}
+
+// Breadcrumbs for tracking user journey
+model Breadcrumb {
+  id              Int       @id @default(autoincrement())
+  userId          Int
+  user            User      @relation(fields: [userId], references: [id])
+  action          String
+  resourceType    String
+  resourceId      String
+  metadata        Json?
+  createdAt       DateTime  @default(now())
+}
+
+// Problems for problem-solution fit
+model Problem {
+  id              Int       @id @default(autoincrement())
+  title           String
+  description     String
+  severity        Float     @default(0.5)
+  frequency       Float     @default(0.5)
+  targetAudience  String
+  userId          Int
+  user            User      @relation(fields: [userId], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Relations
+  solutions       Solution[]
+}
+
+// Solutions
+model Solution {
+  id              Int       @id @default(autoincrement())
+  title           String
+  description     String
+  feasibility     Float     @default(0.5)
+  impact          Float     @default(0.5)
+  problemId       Int
+  problem         Problem   @relation(fields: [problemId], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// Business ecosystems
+model Ecosystem {
+  id              Int       @id @default(autoincrement())
+  name            String
+  description     String
+  centerEntity    String
+  entities        Json      // Array of ecosystem participants
+  relationships   Json      // Connections between entities
+  userId          Int
+  user            User      @relation(fields: [userId], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// Innovation challenges
+model Challenge {
+  id              Int       @id @default(autoincrement())
+  title           String
+  description     String
+  criteria        Json
+  prize           Float?
+  deadline        DateTime
+  status          ChallengeStatus @default(OPEN)
+  userId          Int
+  user            User      @relation(fields: [userId], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Relations
+  submissions     ChallengeSubmission[]
+}
+
+enum ChallengeStatus {
+  DRAFT
+  OPEN
+  EVALUATING
+  COMPLETED
+  CANCELLED
+}
+
+// Challenge submissions
+model ChallengeSubmission {
+  id              Int       @id @default(autoincrement())
+  challengeId     Int
+  challenge       Challenge @relation(fields: [challengeId], references: [id])
+  userId          Int
+  user            User      @relation(fields: [userId], references: [id])
+  title           String
+  description     String
+  solution        Json
+  score           Float?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Relations
+  votes           Vote[]
+}
+
+// Voting system
+model Vote {
+  id              Int                 @id @default(autoincrement())
+  submissionId    Int
+  submission      ChallengeSubmission @relation(fields: [submissionId], references: [id])
+  userId          Int
+  user            User                @relation(fields: [userId], references: [id])
+  value           Int                 // 1 for upvote, -1 for downvote
+  createdAt       DateTime            @default(now())
+  
+  @@unique([submissionId, userId])
+}
+
+// Crowdfunded ideas
+model CrowdfundedIdea {
+  id              Int       @id @default(autoincrement())
+  title           String
+  description     String
+  targetAmount    Float
+  currentAmount   Float     @default(0)
+  deadline        DateTime
+  status          IdeaStatus @default(FUNDING)
+  userId          Int
+  user            User      @relation(fields: [userId], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Relations
+  backings        IdeaBacking[]
+}
+
+enum IdeaStatus {
+  DRAFT
+  FUNDING
+  FUNDED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+// Idea backings
+model IdeaBacking {
+  id              Int             @id @default(autoincrement())
+  ideaId          Int
+  idea            CrowdfundedIdea @relation(fields: [ideaId], references: [id])
+  userId          Int
+  user            User            @relation(fields: [userId], references: [id])
+  amount          Float
+  createdAt       DateTime        @default(now())
+}
+
+// Marketplace listings
+model MarketplaceListing {
+  id              Int       @id @default(autoincrement())
+  title           String
+  description     String
+  category        ListingCategory
+  price           Float
+  files           Json?     // Array of file URLs
+  previewImages   String[]
+  userId          Int
+  user            User      @relation(fields: [userId], references: [id])
+  status          ListingStatus @default(ACTIVE)
+  featured        Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Relations
+  purchases       MarketplacePurchase[]
+  reviews         MarketplaceReview[]
+}
+
+enum ListingCategory {
+  MARKET_REPORT
+  STRATEGY_TEMPLATE
+  DATA_SET
+  ANALYSIS_TOOL
+  COURSE
+  CONSULTATION
+}
+
+enum ListingStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  SOLD_OUT
+  ARCHIVED
+}
+
+// Marketplace purchases
+model MarketplacePurchase {
+  id              Int                @id @default(autoincrement())
+  listingId       Int
+  listing         MarketplaceListing @relation(fields: [listingId], references: [id])
+  userId          Int
+  user            User               @relation(fields: [userId], references: [id])
+  amount          Float
+  commission      Float              // Platform commission
+  sellerAmount    Float              // Amount to seller after commission
+  transactionId   String?            // External payment provider transaction ID
+  createdAt       DateTime           @default(now())
+}
+
+// Marketplace reviews
+model MarketplaceReview {
+  id              Int                @id @default(autoincrement())
+  listingId       Int
+  listing         MarketplaceListing @relation(fields: [listingId], references: [id])
+  userId          Int
+  user            User               @relation(fields: [userId], references: [id])
+  rating          Int                // 1-5 stars
+  comment         String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  
+  @@unique([listingId, userId])
+}
+
+// User preferences
+model UserPreferences {
+  id              Int       @id @default(autoincrement())
+  userId          Int       @unique
+  user            User      @relation(fields: [userId], references: [id])
+  theme           String    @default("light")
+  emailNotifications Boolean @default(true)
+  weeklyDigest    Boolean   @default(true)
+  dataSharing     Boolean   @default(false)
+  language        String    @default("en")
+  timezone        String    @default("UTC")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// Subscription management
+model UserSubscription {
+  id              Int       @id @default(autoincrement())
+  userId          Int       @unique
+  user            User      @relation(fields: [userId], references: [id])
+  tier            SubscriptionTier @default(FREE)
+  status          SubscriptionStatus @default(ACTIVE)
+  startDate       DateTime  @default(now())
+  endDate         DateTime?
+  stripeCustomerId String?
+  stripeSubscriptionId String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+enum SubscriptionTier {
+  FREE
+  STARTER
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+  SUSPENDED
+}
+
+// Credit system
+model CreditBalance {
+  id              Int       @id @default(autoincrement())
+  userId          Int       @unique
+  user            User      @relation(fields: [userId], references: [id])
+  balance         Int       @default(100) // Free credits on signup
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Relations
+  transactions    CreditTransaction[]
+}
+
+// Credit transactions
+model CreditTransaction {
+  id              Int       @id @default(autoincrement())
+  balanceId       Int
+  balance         CreditBalance @relation(fields: [balanceId], references: [id])
+  amount          Int       // Positive for credits, negative for usage
+  type            TransactionType
+  description     String
+  metadata        Json?
+  createdAt       DateTime  @default(now())
+}
+
+enum TransactionType {
+  PURCHASE
+  USAGE
+  REFUND
+  BONUS
+  REFERRAL
+}
+
+// User badges/achievements
+model UserBadge {
+  id              Int       @id @default(autoincrement())
+  userId          Int
+  user            User      @relation(fields: [userId], references: [id])
+  badge           BadgeType
+  earnedAt        DateTime  @default(now())
+  
+  @@unique([userId, badge])
+}
+
+enum BadgeType {
+  EARLY_ADOPTER
+  STRATEGIST
+  INNOVATOR
+  CONTRIBUTOR
+  EXPERT
+  MENTOR
+}
+
+// Referral system
+model Referral {
+  id              Int       @id @default(autoincrement())
+  referrerId      Int
+  referrer        User      @relation("ReferralUser", fields: [referrerId], references: [id])
+  referredId      Int
+  referred        User      @relation("ReferredUser", fields: [referredId], references: [id])
+  status          ReferralStatus @default(PENDING)
+  rewardAmount    Float?
+  createdAt       DateTime  @default(now())
+  completedAt     DateTime?
+  
+  @@unique([referrerId, referredId])
+}
+
+enum ReferralStatus {
+  PENDING
+  COMPLETED
+  EXPIRED
+  CANCELLED
+}
