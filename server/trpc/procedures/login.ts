@@ -5,6 +5,8 @@ import jwt from "jsonwebtoken";
 import { db } from "~/server/db";
 import { baseProcedure } from "~/server/trpc/main";
 import { env } from "~/server/env";
+import { logger } from "~/server/utils/logger";
+import { sanitizeEmail } from "~/server/utils/sanitize";
 
 export const login = baseProcedure
   .input(
@@ -14,12 +16,17 @@ export const login = baseProcedure
     }),
   )
   .mutation(async ({ input }) => {
+    const sanitizedEmail = sanitizeEmail(input.email);
+
+    logger.info("Login attempt", { email: sanitizedEmail });
+
     // Find user
     const user = await db.user.findUnique({
-      where: { email: input.email },
+      where: { email: sanitizedEmail },
     });
 
     if (!user) {
+      logger.security("Login failed - user not found", { email: sanitizedEmail });
       throw new TRPCError({
         code: "UNAUTHORIZED",
         message: "Invalid email or password",
@@ -33,6 +40,10 @@ export const login = baseProcedure
     );
 
     if (!isValidPassword) {
+      logger.security("Login failed - invalid password", { 
+        email: sanitizedEmail,
+        userId: user.id 
+      });
       throw new TRPCError({
         code: "UNAUTHORIZED",
         message: "Invalid email or password",
@@ -49,6 +60,8 @@ export const login = baseProcedure
     const token = jwt.sign({ userId: user.id }, env.JWT_SECRET, {
       expiresIn: "30d",
     });
+
+    logger.audit("User logged in", user.id, { email: sanitizedEmail });
 
     return {
       user: {

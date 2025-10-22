@@ -76,8 +76,10 @@ import { createCrowdfundedIdea } from "~/server/trpc/procedures/createCrowdfunde
 import { createEcosystem } from "~/server/trpc/procedures/createEcosystem";
 import { generateValueCurveData } from "~/server/trpc/procedures/generateValueCurveData";
 import { generateHeatMapData } from "~/server/trpc/procedures/generateHeatMapData";
+import { healthCheck } from "~/server/trpc/procedures/healthCheck";
 
 export const appRouter = createTRPCRouter({
+  healthCheck,
   register,
   login,
   createMarket,

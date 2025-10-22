@@ -5,23 +5,33 @@ import jwt from "jsonwebtoken";
 import { db } from "~/server/db";
 import { baseProcedure } from "~/server/trpc/main";
 import { env } from "~/server/env";
+import { logger } from "~/server/utils/logger";
+import { sanitizeEmail, truncateString } from "~/server/utils/sanitize";
 
 export const register = baseProcedure
   .input(
     z.object({
       email: z.string().email(),
-      password: z.string().min(8, "Password must be at least 8 characters"),
-      name: z.string().min(1, "Name is required"),
+      password: z.string().min(8, "Password must be at least 8 characters").max(128, "Password too long"),
+      name: z.string().min(1, "Name is required").max(255, "Name too long"),
       role: z.enum(["analyst", "strategist", "executive"]).default("analyst"),
     }),
   )
   .mutation(async ({ input }) => {
+    const sanitizedEmail = sanitizeEmail(input.email);
+    const sanitizedName = truncateString(input.name.trim(), 255);
+
+    logger.info("Registration attempt", { email: sanitizedEmail });
+
     // Check if user already exists
     const existingUser = await db.user.findUnique({
-      where: { email: input.email },
+      where: { email: sanitizedEmail },
     });
 
     if (existingUser) {
+      logger.security("Registration failed - email already exists", { 
+        email: sanitizedEmail 
+      });
       throw new TRPCError({
         code: "CONFLICT",
         message: "User with this email already exists",
@@ -34,11 +44,16 @@ export const register = baseProcedure
     // Create user
     const user = await db.user.create({
       data: {
-        email: input.email,
+        email: sanitizedEmail,
         passwordHash,
-        name: input.name,
+        name: sanitizedName,
         role: input.role,
       },
+    });
+
+    logger.audit("User registered", user.id, { 
+      email: sanitizedEmail,
+      role: input.role 
     });
 
     // Generate JWT token
