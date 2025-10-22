@@ -1,0 +1,589 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  password          String
+  name              String?
+  avatar            String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  // Subscription and billing
+  subscriptionTier  String   @default("free") // free, pro, enterprise
+  creditBalance     Int      @default(0)
+  stripeCustomerId  String?
+  
+  // User preferences
+  preferences       UserPreferences?
+  
+  // Relationships
+  markets           Market[]
+  opportunities     Opportunity[]
+  competitors       Competitor[]
+  segments          Segment[]
+  boards            Board[]
+  radars            Radar[]
+  strategySessions  StrategySession[]
+  scenarios         Scenario[]
+  blueOceanCanvases BlueOceanCanvas[]
+  marketplaceListings MarketplaceListing[]
+  marketplaceReviews MarketplaceReview[]
+  challengeSubmissions ChallengeSubmission[]
+  votes             Vote[]
+  badges            UserBadge[]
+  problems          Problem[]
+  problemSolutions  ProblemSolution[]
+  crowdfundedIdeas  CrowdfundedIdea[]
+  ecosystems        Ecosystem[]
+  breadcrumbs       Breadcrumb[]
+  
+  @@map("users")
+}
+
+model UserPreferences {
+  id                    String  @id @default(cuid())
+  userId                String  @unique
+  user                  User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Notification preferences
+  emailNotifications    Boolean @default(true)
+  pushNotifications     Boolean @default(true)
+  marketingEmails       Boolean @default(false)
+  
+  // Display preferences
+  theme                 String  @default("light") // light, dark, auto
+  language              String  @default("en")
+  timezone              String  @default("UTC")
+  
+  // AI preferences
+  aiInsightsEnabled     Boolean @default(true)
+  autoGenerateReports   Boolean @default(false)
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  @@map("user_preferences")
+}
+
+model Market {
+  id                String   @id @default(cuid())
+  name              String
+  description       String?
+  industry          String
+  size              String?
+  growth            Float?
+  trends            Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Relationships
+  opportunities     Opportunity[]
+  competitors       Competitor[]
+  segments          Segment[]
+  
+  @@map("markets")
+}
+
+model Opportunity {
+  id                String   @id @default(cuid())
+  title             String
+  description       String
+  category          String
+  priority          String   @default("medium") // low, medium, high, critical
+  status            String   @default("identified") // identified, analyzing, validated, pursuing, completed
+  score             Float?
+  potential         Float?
+  difficulty        Float?
+  timeframe         String?
+  tags              String[]
+  metadata          Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  marketId          String
+  market            Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  
+  // Relationships
+  boardOpportunities BoardOpportunity[]
+  scenarios         Scenario[]
+  connections       OpportunityConnection[] @relation("OpportunityConnections")
+  connectedTo       OpportunityConnection[] @relation("ConnectedOpportunities")
+  
+  @@map("opportunities")
+}
+
+model Competitor {
+  id                String   @id @default(cuid())
+  name              String
+  description       String?
+  strengths         String[]
+  weaknesses        String[]
+  marketShare       Float?
+  revenue           Float?
+  website           String?
+  metadata          Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  marketId          String
+  market            Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  
+  @@map("competitors")
+}
+
+model Segment {
+  id                String   @id @default(cuid())
+  name              String
+  description       String?
+  size              Int?
+  characteristics   Json?
+  needs             String[]
+  painPoints        String[]
+  demographics      Json?
+  psychographics    Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  marketId          String
+  market            Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  
+  @@map("segments")
+}
+
+model Board {
+  id                String   @id @default(cuid())
+  name              String
+  description       String?
+  color             String?
+  isPublic          Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Relationships
+  opportunities     BoardOpportunity[]
+  
+  @@map("boards")
+}
+
+model BoardOpportunity {
+  id                String   @id @default(cuid())
+  position          Int?
+  notes             String?
+  createdAt         DateTime @default(now())
+  
+  boardId           String
+  board             Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  opportunityId     String
+  opportunity       Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  
+  @@unique([boardId, opportunityId])
+  @@map("board_opportunities")
+}
+
+model Radar {
+  id                String   @id @default(cuid())
+  name              String
+  description       String?
+  criteria          Json
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("radars")
+}
+
+model StrategySession {
+  id                String   @id @default(cuid())
+  title             String
+  description       String?
+  status            String   @default("active") // active, completed, archived
+  messages          Json[]
+  context           Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("strategy_sessions")
+}
+
+model Scenario {
+  id                String   @id @default(cuid())
+  name              String
+  description       String
+  assumptions       Json
+  outcomes          Json?
+  probability       Float?
+  impact            Float?
+  timeframe         String?
+  status            String   @default("draft") // draft, analyzing, completed
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunityId     String
+  opportunity       Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  
+  @@map("scenarios")
+}
+
+model BlueOceanCanvas {
+  id                String   @id @default(cuid())
+  name              String
+  description       String?
+  eliminate         Json
+  reduce            Json
+  raise             Json
+  create            Json
+  status            String   @default("draft") // draft, in_progress, completed
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("blue_ocean_canvases")
+}
+
+model MarketplaceListing {
+  id                String   @id @default(cuid())
+  title             String
+  description       String
+  category          String
+  price             Float
+  currency          String   @default("USD")
+  type              String   // template, strategy, analysis, etc.
+  content           Json
+  tags              String[]
+  isActive          Boolean  @default(true)
+  downloads         Int      @default(0)
+  rating            Float?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  sellerId          String
+  seller            User     @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  
+  // Relationships
+  reviews           MarketplaceReview[]
+  purchases         MarketplacePurchase[]
+  
+  @@map("marketplace_listings")
+}
+
+model MarketplaceReview {
+  id                String   @id @default(cuid())
+  rating            Int      // 1-5 stars
+  comment           String?
+  createdAt         DateTime @default(now())
+  
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listingId         String
+  listing           MarketplaceListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, listingId])
+  @@map("marketplace_reviews")
+}
+
+model MarketplacePurchase {
+  id                String   @id @default(cuid())
+  amount            Float
+  currency          String   @default("USD")
+  stripePaymentId   String?
+  status            String   @default("pending") // pending, completed, failed, refunded
+  createdAt         DateTime @default(now())
+  
+  buyerId           String
+  listingId         String
+  listing           MarketplaceListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  
+  @@map("marketplace_purchases")
+}
+
+model Challenge {
+  id                String   @id @default(cuid())
+  title             String
+  description       String
+  category          String
+  difficulty        String   // beginner, intermediate, advanced, expert
+  reward            Int      // credits
+  deadline          DateTime?
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  // Relationships
+  submissions       ChallengeSubmission[]
+  
+  @@map("challenges")
+}
+
+model ChallengeSubmission {
+  id                String   @id @default(cuid())
+  content           Json
+  status            String   @default("submitted") // submitted, under_review, approved, rejected
+  score             Int?
+  feedback          String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challengeId       String
+  challenge         Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  
+  // Relationships
+  votes             Vote[]
+  
+  @@unique([userId, challengeId])
+  @@map("challenge_submissions")
+}
+
+model Vote {
+  id                String   @id @default(cuid())
+  type              String   // upvote, downvote
+  createdAt         DateTime @default(now())
+  
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  submissionId      String
+  submission        ChallengeSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, submissionId])
+  @@map("votes")
+}
+
+model Badge {
+  id                String   @id @default(cuid())
+  name              String   @unique
+  description       String
+  icon              String
+  category          String
+  requirements      Json
+  createdAt         DateTime @default(now())
+  
+  // Relationships
+  userBadges        UserBadge[]
+  
+  @@map("badges")
+}
+
+model UserBadge {
+  id                String   @id @default(cuid())
+  earnedAt          DateTime @default(now())
+  
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badgeId           String
+  badge             Badge    @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, badgeId])
+  @@map("user_badges")
+}
+
+model Problem {
+  id                String   @id @default(cuid())
+  title             String
+  description       String
+  category          String
+  severity          String   @default("medium") // low, medium, high, critical
+  status            String   @default("open") // open, in_progress, solved, closed
+  bounty            Int?     // credits
+  tags              String[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Relationships
+  solutions         ProblemSolution[]
+  
+  @@map("problems")
+}
+
+model ProblemSolution {
+  id                String   @id @default(cuid())
+  title             String
+  description       String
+  implementation    Json?
+  status            String   @default("proposed") // proposed, accepted, rejected, implemented
+  votes             Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problemId         String
+  problem           Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  
+  @@map("problem_solutions")
+}
+
+model CrowdfundedIdea {
+  id                String   @id @default(cuid())
+  title             String
+  description       String
+  category          String
+  targetAmount      Float
+  currentAmount     Float    @default(0)
+  currency          String   @default("USD")
+  deadline          DateTime
+  status            String   @default("active") // active, funded, failed, cancelled
+  rewards           Json?
+  updates           Json[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("crowdfunded_ideas")
+}
+
+model Ecosystem {
+  id                String   @id @default(cuid())
+  name              String
+  description       String?
+  type              String   // business, innovation, market, etc.
+  stakeholders      Json
+  relationships     Json
+  dynamics          Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("ecosystems")
+}
+
+model OpportunityConnection {
+  id                String   @id @default(cuid())
+  type              String   // synergy, dependency, conflict, etc.
+  strength          Float    // 0-1
+  description       String?
+  createdAt         DateTime @default(now())
+  
+  opportunityId     String
+  opportunity       Opportunity @relation("OpportunityConnections", fields: [opportunityId], references: [id], onDelete: Cascade)
+  connectedId       String
+  connected         Opportunity @relation("ConnectedOpportunities", fields: [connectedId], references: [id], onDelete: Cascade)
+  
+  @@unique([opportunityId, connectedId])
+  @@map("opportunity_connections")
+}
+
+model TrendIntersection {
+  id                String   @id @default(cuid())
+  trend1            String
+  trend2            String
+  intersection      String
+  impact            Float    // 0-1
+  probability       Float    // 0-1
+  timeframe         String?
+  opportunities     Json?
+  createdAt         DateTime @default(now())
+  
+  @@map("trend_intersections")
+}
+
+model ValueMigration {
+  id                String   @id @default(cuid())
+  fromSector        String
+  toSector          String
+  value             Float
+  timeframe         String
+  drivers           String[]
+  impact            Json?
+  confidence        Float    // 0-1
+  createdAt         DateTime @default(now())
+  
+  @@map("value_migrations")
+}
+
+model Partnership {
+  id                String   @id @default(cuid())
+  type              String   // strategic, technology, distribution, etc.
+  industry1         String
+  industry2         String
+  synergies         String[]
+  risks             String[]
+  potential         Float    // 0-1
+  examples          Json?
+  createdAt         DateTime @default(now())
+  
+  @@map("partnerships")
+}
+
+model Breadcrumb {
+  id                String   @id @default(cuid())
+  path              String
+  label             String
+  metadata          Json?
+  createdAt         DateTime @default(now())
+  
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("breadcrumbs")
+}
+
+model PaymentIntent {
+  id                String   @id @default(cuid())
+  stripePaymentId   String   @unique
+  amount            Float
+  currency          String   @default("USD")
+  status            String   // pending, succeeded, failed, cancelled
+  type              String   // credits, subscription, marketplace
+  metadata          Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  @@map("payment_intents")
+}
+
+model SubscriptionTier {
+  id                String   @id @default(cuid())
+  name              String   @unique
+  description       String
+  price             Float
+  currency          String   @default("USD")
+  interval          String   // month, year
+  features          Json
+  limits            Json
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  @@map("subscription_tiers")
+}
