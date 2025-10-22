@@ -1,0 +1,164 @@
+name: Railway Auto-Fix & Deploy
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  fix-and-validate:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: pnpm install
+
+      # Ensure Procfile exists and is correct
+      - name: Validate/Update Procfile
+        run: |
+          if [ ! -f Procfile ]; then
+            echo "web: pnpm start" > Procfile
+            echo "✅ Created Procfile"
+          else
+            echo "✅ Procfile already exists"
+          fi
+          
+          # Validate Procfile content
+          if ! grep -q "web:" Procfile; then
+            echo "web: pnpm start" > Procfile
+            echo "✅ Updated Procfile with correct format"
+          fi
+
+      # Ensure .env.example exists with all required variables
+      - name: Validate/Update .env.example
+        run: |
+          if [ ! -f .env.example ]; then
+            echo "Creating .env.example..."
+            cat > .env.example << 'EOF'
+          # Railway Environment Variables Template
+          NODE_ENV=production
+          BASE_URL=https://your-app.railway.app
+          BASE_URL_OTHER_PORT=http://localhost:3000
+          ADMIN_PASSWORD=your-secure-admin-password
+          JWT_SECRET=your-jwt-secret-key-min-32-chars
+          OPENROUTER_API_KEY=your-openrouter-api-key
+          STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key
+          STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key
+          STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
+          DEFAULT_COMMISSION_RATE=0.70
+          REFERRAL_REWARD_AMOUNT=10
+          PORT=3000
+          EOF
+            echo "✅ Created .env.example"
+          else
+            echo "✅ .env.example already exists"
+          fi
+
+      # Ensure railway.json exists
+      - name: Validate/Update railway.json
+        run: |
+          if [ ! -f railway.json ]; then
+            echo "Creating railway.json..."
+            cat > railway.json << 'EOF'
+          {
+            "$schema": "https://railway.app/railway.schema.json",
+            "build": {
+              "builder": "NIXPACKS",
+              "buildCommand": "pnpm install && pnpm build"
+            },
+            "deploy": {
+              "startCommand": "pnpm start",
+              "restartPolicyType": "ON_FAILURE",
+              "restartPolicyMaxRetries": 10
+            }
+          }
+          EOF
+            echo "✅ Created railway.json"
+          else
+            echo "✅ railway.json already exists"
+          fi
+
+      # Validate package.json has correct scripts
+      - name: Validate package.json scripts
+        run: |
+          echo "Checking package.json scripts..."
+          if ! grep -q '"start":' package.json; then
+            echo "❌ Missing 'start' script in package.json"
+            exit 1
+          fi
+          if ! grep -q '"build":' package.json; then
+            echo "❌ Missing 'build' script in package.json"
+            exit 1
+          fi
+          echo "✅ Package.json scripts validated"
+
+      # Run type checking and linting
+      - name: Type Check
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      # Build the application to ensure it works
+      - name: Build Application
+        run: pnpm build
+
+      # Commit any auto-generated files
+      - name: Auto-commit Railway configs
+        run: |
+          git config user.name "railway-bot"
+          git config user.email "railway-bot@github.com"
+          
+          # Check if there are any changes to commit
+          if git diff --quiet; then
+            echo "No changes to commit"
+          else
+            git add Procfile .env.example railway.json
+            git commit -m "🤖 Auto-corrected Railway deployment configs
+
+            - Ensured Procfile exists with correct start command
+            - Updated .env.example with all required environment variables
+            - Added railway.json with proper build and deploy configuration
+            - Validated package.json scripts for Railway compatibility"
+            git push || echo "Push failed - may need manual intervention"
+          fi
+
+  # Optional: Deploy to Railway (uncomment if you have Railway CLI token)
+  # deploy:
+  #   needs: fix-and-validate
+  #   runs-on: ubuntu-latest
+  #   if: github.ref == 'refs/heads/main'
+  #   
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
+  #     
+  #     - name: Install Railway CLI
+  #       run: |
+  #         curl -fsSL https://railway.app/install.sh | sh
+  #         echo "$HOME/.railway/bin" >> $GITHUB_PATH
+  #     
+  #     - name: Deploy to Railway
+  #       run: |
+  #         railway login --token ${{ secrets.RAILWAY_TOKEN }}
+  #         railway up
+  #       env:
+  #         RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
