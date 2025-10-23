@@ -1,4 +1,5 @@
 {
   "routeTreeFileHeader": ["// noinspection JSUnusedGlobalSymbols"],
-  "generatedRouteTree": "./src/generated/tanstack-router/routeTree.gen.ts"
+  "generatedRouteTree": "./src/generated/routeTree.gen.ts",
+  "routesDirectory": "./src/routes"
 }

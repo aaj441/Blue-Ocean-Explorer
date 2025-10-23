@@ -1,0 +1,21 @@
+[phases.setup]
+nixPkgs = ["nodejs-18_x", "openssl"]
+
+[phases.install]
+cmds = [
+  "npm install --legacy-peer-deps"
+]
+
+[phases.build]
+cmds = [
+  "npx prisma generate",
+  "npx tsr generate",
+  "npm run build"
+]
+
+[start]
+cmd = "npm run start"
+
+[variables]
+NODE_ENV = "production"
+PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING = "1"
