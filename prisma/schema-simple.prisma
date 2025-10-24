@@ -1,0 +1,117 @@
+// Blue Ocean Explorer - AI Opportunity Matcher
+// "Enter your idea, discover related AI opportunities nobody knows about"
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== SCRAPED AI PROJECTS ====================
+
+model AIProject {
+  id          Int      @id @default(autoincrement())
+
+  // Source info
+  sourceType  String   // github, reddit, huggingface, arxiv, discord
+  sourceUrl   String   @unique
+  title       String
+  description String
+  content     String   // Full text for search
+
+  // Metadata
+  author      String?
+  stars       Int?
+  downloads   Int?
+  forks       Int?
+  lastActive  DateTime?
+  tags        String   // Comma-separated tags
+
+  // Embeddings for semantic search
+  embedding   String?  // JSON array of floats
+
+  // Blue Ocean scores
+  noveltyScore       Float? // How unique/unexplored
+  actionabilityScore Float? // How easy to build
+  blueOceanScore     Float? // Combined score
+
+  scrapedAt DateTime @default(now())
+
+  matches Match[]
+
+  @@index([sourceType])
+  @@index([blueOceanScore])
+}
+
+// ==================== USER SEARCHES ====================
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String?  @unique
+  sessionId String?  @unique // Anonymous cookie
+  createdAt DateTime @default(now())
+
+  searches  Search[]
+  favorites Favorite[]
+
+  @@index([sessionId])
+}
+
+model Search {
+  id        Int      @id @default(autoincrement())
+  userId    Int?
+
+  // User's input
+  query     String
+  embedding String? // JSON array
+
+  createdAt DateTime @default(now())
+
+  user    User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  matches Match[]
+
+  @@index([userId])
+}
+
+// ==================== MATCHES (SEARCH RESULTS) ====================
+
+model Match {
+  id          Int    @id @default(autoincrement())
+  searchId    Int
+  projectId   Int
+
+  // Matching scores
+  similarityScore Float // Cosine similarity 0-1
+  relevanceScore  Float // Combined score
+
+  // AI-generated explanation
+  whyRelevant    String? // "This relates to your idea because..."
+  differentiator String? // "But it's unique because..."
+
+  rank      Int
+  clicked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  search  Search    @relation(fields: [searchId], references: [id], onDelete: Cascade)
+  project AIProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([searchId, projectId])
+  @@index([searchId])
+}
+
+// ==================== USER ACTIONS ====================
+
+model Favorite {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  projectId Int
+  notes     String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId])
+}

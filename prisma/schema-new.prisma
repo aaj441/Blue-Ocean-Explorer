@@ -1,0 +1,251 @@
+// Blue Ocean Explorer - AI Opportunity Discovery Platform
+// "Show me 3-5 under-the-radar AI product ideas that I can ship in a weekend"
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql" // Use PostgreSQL for Railway
+  url      = env("DATABASE_URL")
+}
+
+// ==================== USER & AUTH ====================
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String?
+  name      String?
+  credits   Int      @default(3) // 3 free swipes, then $5 paywall
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  swipes    Swipe[]
+  builds    Build[]
+  upvotes   Upvote[]
+  payments  Payment[]
+
+  @@index([email])
+}
+
+// ==================== RAW DATA SOURCES ====================
+
+model RawSource {
+  id           String   @id @default(cuid())
+  sourceType   String   // github, reddit, discord, huggingface, arxiv, patents
+  sourceUrl    String   @unique
+  title        String
+  description  String   @db.Text
+  rawContent   String   @db.Text
+  author       String?
+  stars        Int?     // GitHub stars
+  downloads    Int?     // HF downloads
+  citations    Int?     // arXiv citations
+  lastActive   DateTime?
+  scrapedAt    DateTime @default(now())
+  metadata     Json?    // Flexible metadata
+
+  chunks RawChunk[]
+
+  @@index([sourceType])
+  @@index([stars])
+  @@index([scrapedAt])
+}
+
+model RawChunk {
+  id             String   @id @default(cuid())
+  rawSourceId    String
+  chunkIndex     Int
+  text           String   @db.Text
+  embedding      Json?    // Vector as JSON array
+  minHashSig     String?  // For deduplication
+
+  // Blue Ocean Scores (0-1)
+  rarityScore    Float?   // 1 - cosine_sim_to_nearest
+  recencyScore   Float?   // exp(-days_since_pub / 180)
+  actionability  Float?   // LLM judge 0-1
+  blueOceanScore Float?   // 0.5*rarity + 0.3*recency + 0.2*actionability
+
+  isNovel        Boolean  @default(false)
+  processedAt    DateTime?
+
+  rawSource RawSource @relation(fields: [rawSourceId], references: [id], onDelete: Cascade)
+  ideas     Idea[]
+
+  @@index([rawSourceId])
+  @@index([blueOceanScore])
+  @@index([isNovel])
+}
+
+// ==================== GENERATED IDEAS (THE PRODUCT) ====================
+
+model Idea {
+  id            String   @id @default(cuid())
+  rawChunkId    String
+
+  // The 3 reframed concepts
+  name          String   // "AI Email Summarizer"
+  pitch         String   @db.Text // "Turn any inbox into a daily 3-bullet TL;DR"
+  distroChannel String   @db.Text // "Chrome extension + ProductHunt launch"
+
+  // Ranking scores
+  tamProxy          Float @default(0) // Google KW + Reddit + LinkedIn volume
+  competitionProxy  Float @default(0) // Crunchbase exact matches
+  finalScore        Float @default(0) // TAM / (competition + 1)
+
+  // Super prompt generation
+  superPrompt     String? @db.Text // Full Cursor MVP prompt
+  templateRepoUrl String? // GitHub template
+  dribbbleRef     String? // Design reference
+
+  // Engagement metrics
+  views    Int @default(0)
+  swipes   Int @default(0)
+  builds   Int @default(0)
+  upvotes  Int @default(0)
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  rawChunk      RawChunk @relation(fields: [rawChunkId], references: [id], onDelete: Cascade)
+  swipeHistory  Swipe[]
+  buildHistory  Build[]
+  upvoteHistory Upvote[]
+
+  @@index([finalScore])
+  @@index([isActive])
+  @@index([createdAt])
+}
+
+// ==================== USER ACTIONS ====================
+
+model Swipe {
+  id        String   @id @default(cuid())
+  userId    String
+  ideaId    String
+  direction String   // left (pass), right (like), up (super-like)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  idea Idea @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, ideaId])
+  @@index([userId])
+  @@index([ideaId])
+  @@index([createdAt])
+}
+
+model Build {
+  id      String   @id @default(cuid())
+  userId  String
+  ideaId  String
+
+  // GitHub repo
+  repoName  String?
+  repoUrl   String?
+  deployUrl String? // Vercel/Railway URL
+
+  status          String   @default("initialized") // initialized, coding, deployed, live
+  progressLog     Json?    // Array of milestones
+  createdAt       DateTime @default(now())
+  lastActivityAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  idea Idea @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([ideaId])
+  @@index([status])
+}
+
+model Upvote {
+  id        String   @id @default(cuid())
+  userId    String
+  ideaId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  idea Idea @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, ideaId])
+  @@index([ideaId])
+}
+
+// ==================== PAYMENTS ====================
+
+model Payment {
+  id              String   @id @default(cuid())
+  userId          String
+  amount          Float
+  currency        String   @default("usd")
+  status          String   // pending, completed, failed
+  stripePaymentId String?  @unique
+  creditsAdded    Int      // Usually 10 credits for $5
+  createdAt       DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+}
+
+// ==================== BACKGROUND JOBS ====================
+
+model IngestionJob {
+  id          String    @id @default(cuid())
+  sourceType  String    // github, reddit, huggingface, etc.
+  status      String    @default("pending") // pending, running, completed, failed
+  itemsFound  Int       @default(0)
+  itemsSaved  Int       @default(0)
+  errorLog    String?   @db.Text
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  @@index([sourceType])
+  @@index([status])
+  @@index([startedAt])
+}
+
+model ProcessingQueue {
+  id         String    @id @default(cuid())
+  jobType    String    // embed, score, reframe, rank
+  entityType String    // chunk, idea
+  entityId   String
+  priority   Int       @default(5)
+  status     String    @default("pending") // pending, processing, completed, failed
+  attempts   Int       @default(0)
+  errorLog   String?   @db.Text
+  createdAt  DateTime  @default(now())
+  processedAt DateTime?
+
+  @@index([jobType, status])
+  @@index([priority])
+  @@index([createdAt])
+}
+
+// ==================== LEADERBOARD ====================
+
+model WeeklyLeaderboard {
+  id        String   @id @default(cuid())
+  ideaId    String
+  weekStart DateTime
+  rank      Int
+  score     Float // Weighted: upvotes + builds
+
+  @@unique([weekStart, rank])
+  @@index([weekStart])
+  @@index([rank])
+}
+
+model WaitlistEntry {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  referrer  String? // Viral loop
+  referrals Int      @default(0)
+  position  Int?
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([referrer])
+}

@@ -1,15 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useAuthStore } from "~/stores/authStore";
-import {
-  Waves,
-  TrendingUp,
-  Target,
-  BarChart3,
-  Users,
-  Lightbulb,
-  ArrowRight,
-} from "lucide-react";
-import { useEffect } from "react";
+import { useState } from "react";
+import { Sparkles, Search, TrendingUp, Zap } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   component: Home,
@@ -17,13 +8,19 @@ export const Route = createFileRoute("/")({
 
 function Home() {
   const navigate = useNavigate();
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated());
+  const [idea, setIdea] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      navigate({ to: "/dashboard" });
-    }
-  }, [isAuthenticated, navigate]);
+  const handleSearch = async () => {
+    if (!idea.trim()) return;
+    setIsSearching(true);
+    // Navigate to results
+    await navigate({
+      to: "/discover",
+      search: { q: idea },
+    });
+    setIsSearching(false);
+  };
 
   const features = [
     {
