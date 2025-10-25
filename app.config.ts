@@ -7,9 +7,17 @@ import { env } from "./src/server/env";
 import { nodePolyfills } from "vite-plugin-node-polyfills";
 import { consoleForwardPlugin } from "./vite-console-forward-plugin";
 
+// Detect deployment environment
+const isVercel = process.env.VERCEL === "1";
+const isRailway = process.env.RAILWAY_ENVIRONMENT !== undefined;
+const isProduction = process.env.NODE_ENV === "production";
+
+// Choose preset based on environment
+const serverPreset = isVercel ? "vercel" : isRailway ? "node-server" : "node-server";
+
 export default createApp({
   server: {
-    preset: "node-server", // change to 'netlify' or 'bun' or anyof the supported presets for nitro (nitro.unjs.io)
+    preset: serverPreset,
     experimental: {
       asyncContext: true,
     },

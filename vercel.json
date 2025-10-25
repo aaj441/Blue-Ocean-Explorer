@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "app.config.ts",
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": ["**/*"]
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/trpc/(.*)",
+      "dest": "/trpc/$1"
+    },
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/$1"
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  }
+}
